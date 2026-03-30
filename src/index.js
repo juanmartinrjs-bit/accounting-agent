@@ -2,8 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const { getAuthUrl, getTokens, fetchPaymentEmails } = require('./email/gmail');
-const { extractTransaction, generateSummary } = require('./agent/claude');
+const { extractTransaction, generateSummary, askAccountant, analyzeTransaction } = require('./agent/claude');
 const { generateExcel } = require('./excel/generator');
+
+// Historial de conversaciones por usuario (en memoria)
+const chatHistories = {};
 
 const app = express();
 app.use(express.json());
@@ -72,9 +75,56 @@ app.get('/download/:filename', (req, res) => {
   res.download(filepath);
 });
 
+// ── Chat con el contador (modo conversacional) ────────────────────
+app.post('/chat', async (req, res) => {
+  const { userId = 'default', message, context = 'empresa' } = req.body;
+
+  if (!message) return res.status(400).json({ error: 'Se requiere un mensaje.' });
+
+  if (!chatHistories[userId]) chatHistories[userId] = [];
+
+  try {
+    const reply = await askAccountant(message, chatHistories[userId]);
+
+    // Guardar historial (máx 20 turnos para no sobrepasar tokens)
+    chatHistories[userId].push({ role: 'user', content: message });
+    chatHistories[userId].push({ role: 'assistant', content: reply });
+    if (chatHistories[userId].length > 40) {
+      chatHistories[userId] = chatHistories[userId].slice(-40);
+    }
+
+    res.json({ reply, userId });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Analizar una transacción puntual ──────────────────────────────
+app.post('/analyze', async (req, res) => {
+  const { description, amount, currency = 'COP', context = 'empresa' } = req.body;
+
+  if (!description || !amount) {
+    return res.status(400).json({ error: 'Se requieren description y amount.' });
+  }
+
+  try {
+    const analysis = await analyzeTransaction(description, amount, currency, context);
+    res.json({ analysis });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Limpiar historial de chat ─────────────────────────────────────
+app.post('/chat/reset', (req, res) => {
+  const { userId = 'default' } = req.body;
+  chatHistories[userId] = [];
+  res.json({ status: 'Historial limpiado', userId });
+});
+
 // ── Status ────────────────────────────────────────────────────────
 app.get('/status', (req, res) => {
-  res.json({ status: '🧾 Accounting Agent running', version: '1.0' });
+  res.json({ status: '🧾 Accounting Agent running', version: '2.0' });
 });
 
 // Background email processing

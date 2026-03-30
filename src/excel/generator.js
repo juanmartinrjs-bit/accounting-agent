@@ -7,7 +7,7 @@ function generateExcel(transactions, summary, userId) {
 
   // ── Sheet 1: All Transactions ──────────────────────────────────
   const txData = [
-    ['Date', 'Description', 'Category', 'Type', 'Amount', 'Currency', 'Source', 'Confidence']
+    ['Fecha', 'Descripción', 'Categoría PUC', 'Código PUC', 'Tipo', 'Monto (COP)', 'Moneda Original', 'Monto Original', 'Fuente', 'Deducible', 'Notas Fiscales', 'Alerta', 'Confianza']
   ];
 
   transactions.forEach(t => {
@@ -15,20 +15,25 @@ function generateExcel(transactions, summary, userId) {
       t.date,
       t.description,
       t.category,
-      t.type,
+      t.puc_code || '',
+      t.type === 'income' ? 'Ingreso' : 'Gasto',
       t.amount,
-      t.currency || 'USD',
+      t.original_currency || t.currency || 'COP',
+      t.original_amount || '',
       t.source,
+      t.deductible === false ? 'NO' : 'SÍ',
+      t.tax_notes || '',
+      t.alert || '',
       t.confidence
     ]);
   });
 
   const txSheet = XLSX.utils.aoa_to_sheet(txData);
 
-  // Style header row
   txSheet['!cols'] = [
-    { wch: 12 }, { wch: 35 }, { wch: 15 }, { wch: 10 },
-    { wch: 12 }, { wch: 10 }, { wch: 20 }, { wch: 12 }
+    { wch: 12 }, { wch: 35 }, { wch: 25 }, { wch: 12 }, { wch: 10 },
+    { wch: 15 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 10 },
+    { wch: 30 }, { wch: 35 }, { wch: 10 }
   ];
 
   XLSX.utils.book_append_sheet(wb, txSheet, 'Transactions');
