@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧾 Contador Virtual</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-dark:   #1b5e20;
+      --green-main:   #2e7d32;
+      --green-mid:    #388e3c;
+      --green-light:  #a5d6a7;
+      --green-pale:   #e8f5e9;
+      --white:        #ffffff;
+      --gray-100:     #f5f5f5;
+      --gray-200:     #eeeeee;
+      --gray-400:     #bdbdbd;
+      --gray-600:     #757575;
+      --gray-800:     #424242;
+      --bubble-user:  #2e7d32;
+      --bubble-bot:   #ffffff;
+      --red:          #c62828;
+      --amber:        #f57f17;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #e0e0e0;
+      height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── App shell ── */
+    .app {
+      width: 100%;
+      max-width: 480px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: var(--gray-100);
+      box-shadow: 0 0 32px rgba(0,0,0,.25);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--green-dark);
+      color: var(--white);
+      padding: 12px 16px 8px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,.3);
+      z-index: 10;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 40px; height: 40px;
+      background: var(--green-mid);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      border: 2px solid var(--green-light);
+    }
+
+    .header h1 { font-size: 16px; font-weight: 700; }
+    .header-sub { font-size: 11px; opacity: .75; margin-top: 1px; }
+
+    .btn-cerrar {
+      background: var(--green-mid);
+      border: none;
+      color: var(--white);
+      padding: 6px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: background .2s;
+    }
+    .btn-cerrar:hover { background: var(--green-light); color: var(--green-dark); }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      background: var(--green-main);
+      padding: 7px 16px;
+      display: flex;
+      gap: 0;
+      font-size: 11px;
+      color: rgba(255,255,255,.9);
+      border-top: 1px solid rgba(255,255,255,.1);
+    }
+
+    .stat {
+      flex: 1;
+      text-align: center;
+      padding: 0 4px;
+    }
+    .stat + .stat { border-left: 1px solid rgba(255,255,255,.2); }
+
+    .stat-label { opacity: .75; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+    .stat-value { font-weight: 700; font-size: 13px; margin-top: 1px; }
+
+    .stat-value.income { color: #a5d6a7; }
+    .stat-value.expense { color: #ef9a9a; }
+    .stat-value.period { color: #fff9c4; }
+
+    /* ── Messages ── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 12px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232e7d32' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .msg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      max-width: 92%;
+    }
+    .msg-row.bot { align-self: flex-start; }
+    .msg-row.user { align-self: flex-end; flex-direction: row-reverse; }
+
+    .bot-icon {
+      width: 28px; height: 28px;
+      background: var(--green-dark);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      margin-bottom: 2px;
+    }
+
+    .bubble {
+      padding: 9px 13px;
+      border-radius: 18px;
+      max-width: 100%;
+      font-size: 14px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .msg-row.bot .bubble {
+      background: var(--bubble-bot);
+      color: var(--gray-800);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.12);
+    }
+
+    .msg-row.user .bubble {
+      background: var(--bubble-user);
+      color: var(--white);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      opacity: .5;
+      margin: 2px 4px 0;
+      align-self: flex-end;
+    }
+
+    /* ── Transaction confirm card ── */
+    .tx-card {
+      background: var(--white);
+      border-radius: 16px;
+      border: 1px solid var(--gray-200);
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.1);
+      max-width: 340px;
+    }
+
+    .tx-card-header {
+      background: var(--green-pale);
+      border-bottom: 1px solid var(--green-light);
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--green-dark);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tx-list { padding: 8px 0; }
+
+    .tx-item {
+      padding: 8px 14px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-size: 13px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .tx-item:last-child { border-bottom: none; }
+
+    .tx-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .tx-info { flex: 1; min-width: 0; }
+    .tx-desc { font-weight: 600; color: var(--gray-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tx-meta { font-size: 11px; color: var(--gray-600); margin-top: 2px; }
+    .tx-amount { font-weight: 700; color: var(--green-dark); white-space: nowrap; }
+    .tx-amount.expense { color: var(--red); }
+    .tx-alert { font-size: 11px; color: var(--amber); margin-top: 3px; }
+
+    .tx-actions {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+      background: var(--gray-100);
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .btn-confirm, .btn-reject {
+      flex: 1; padding: 9px; border-radius: 10px; border: none;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .2s;
+    }
+    .btn-confirm { background: var(--green-main); color: var(--white); }
+    .btn-reject  { background: var(--gray-200); color: var(--gray-600); }
+    .btn-confirm:hover { opacity: .85; }
+    .btn-reject:hover  { opacity: .75; }
+    .btn-confirm:disabled, .btn-reject:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Typing indicator ── */
+    .typing {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 14px;
+      background: var(--white);
+      border-radius: 18px;
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.12);
+      width: fit-content;
+    }
+    .typing span {
+      width: 7px; height: 7px; background: var(--gray-400);
+      border-radius: 50%; animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .2s; }
+    .typing span:nth-child(3) { animation-delay: .4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(.8); opacity: .6; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+
+    /* ── Input bar ── */
+    .input-bar {
+      background: var(--white);
+      border-top: 1px solid var(--gray-200);
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+
+    .input-wrap {
+      flex: 1;
+      background: var(--gray-100);
+      border-radius: 24px;
+      border: 1.5px solid var(--gray-200);
+      display: flex;
+      align-items: flex-end;
+      padding: 6px 12px;
+      transition: border-color .2s;
+    }
+    .input-wrap:focus-within { border-color: var(--green-mid); }
+
+    #msg-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      outline: none;
+      resize: none;
+      max-height: 96px;
+      min-height: 22px;
+      font-family: inherit;
+      color: var(--gray-800);
+      line-height: 1.4;
+    }
+    #msg-input::placeholder { color: var(--gray-400); }
+
+    /* file attach btn */
+    .btn-attach {
+      width: 36px; height: 36px;
+      border-radius: 50%; border: none;
+      background: var(--gray-200);
+      cursor: pointer; font-size: 17px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+      flex-shrink: 0;
+    }
+    .btn-attach:hover { background: var(--green-pale); }
+
+    /* send btn */
+    .btn-send {
+      width: 42px; height: 42px;
+      border-radius: 50%; border: none;
+      background: var(--green-main);
+      color: var(--white);
+      cursor: pointer; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .15s;
+      flex-shrink: 0;
+    }
+    .btn-send:hover { background: var(--green-dark); }
+    .btn-send:active { transform: scale(.92); }
+    .btn-send:disabled { background: var(--gray-400); cursor: not-allowed; }
+
+    /* ── Upload progress ── */
+    .upload-pill {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: var(--green-pale);
+      border: 1px solid var(--green-light);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--green-dark);
+      margin: 0 10px 4px;
+    }
+    .upload-pill.visible { display: flex; }
+    .upload-pill .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--green-light);
+      border-top-color: var(--green-dark);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── System message ── */
+    .sys-msg {
+      text-align: center;
+      font-size: 11.5px;
+      color: var(--gray-600);
+      background: rgba(255,255,255,.7);
+      border-radius: 10px;
+      padding: 4px 10px;
+      margin: 4px auto;
+      max-width: 260px;
+    }
+
+    /* ── Scrollbar ── */
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--gray-400); border-radius: 2px; }
+
+    /* hidden file input */
+    #file-input { display: none; }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute;
+      bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.8);
+      color: var(--white);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s;
+      white-space: nowrap;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-title">
+        <div class="avatar">🧾</div>
+        <div>
+          <h1>Contador Virtual</h1>
+          <div class="header-sub" id="header-sub">Asistente contable con IA</div>
+        </div>
+      </div>
+      <button class="btn-cerrar" onclick="cerrarPeriodo()">📊 Cerrar Período</button>
+    </div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat">
+      <div class="stat-label">Ingresos</div>
+      <div class="stat-value income" id="stat-income">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Gastos</div>
+      <div class="stat-value expense" id="stat-expense">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Período</div>
+      <div class="stat-value period" id="stat-period">—</div>
+    </div>
+  </div>
+
+  <!-- Upload progress pill -->
+  <div class="upload-pill" id="upload-pill">
+    <div class="spinner"></div>
+    <span id="upload-text">Procesando archivo...</span>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages" id="messages"></div>
+
+  <!-- Input bar -->
+  <div class="input-bar">
+    <input type="file" id="file-input" accept="image/*,.pdf,.xlsx,.xls,.csv">
+    <button class="btn-attach" onclick="document.getElementById('file-input').click()" title="Adjuntar archivo">📎</button>
+    <div class="input-wrap">
+      <textarea id="msg-input" rows="1" placeholder="Escribe una transacción o pregunta..."></textarea>
+    </div>
+    <button class="btn-send" id="btn-send" onclick="sendMessage()" title="Enviar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const USER_ID_KEY = 'accounting_user_id';
+
+function getUserId() {
+  let id = localStorage.getItem(USER_ID_KEY);
+  if (!id) {
+    id = 'web_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem(USER_ID_KEY, id);
+  }
+  return id;
+}
+
+const userId = getUserId();
+let statsInterval = null;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  // Welcome message
+  addBotMessage('¡Hola! Soy tu contador virtual 🧾\n\nPuedes enviarme:\n📷 Fotos de facturas o recibos\n📄 Archivos PDF, Excel o CSV\n✍️ Tus transacciones en texto\n❓ Preguntas contables o fiscales\n\nAl cierre del período genero tus estados financieros completos 📊');
+
+  // Load stats
+  await loadStats();
+  statsInterval = setInterval(loadStats, 30000);
+
+  // Setup textarea auto-expand
+  const input = document.getElementById('msg-input');
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 96) + 'px';
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // File input change
+  document.getElementById('file-input').addEventListener('change', handleFileUpload);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATS
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const r = await fetch(`/stats/${userId}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const cur = data.currency || 'COP';
+
+    document.getElementById('stat-income').textContent  = fmtCur(data.totalIncome, cur);
+    document.getElementById('stat-expense').textContent = fmtCur(data.totalExpenses, cur);
+    document.getElementById('stat-period').textContent  = data.period || '—';
+    document.getElementById('header-sub').textContent   = `${data.txCount || 0} transacciones · ${data.period || ''}`;
+  } catch (e) { /* ignore */ }
+}
+
+function fmtCur(n, currency) {
+  if (!n && n !== 0) return '—';
+  try {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency', currency,
+      minimumFractionDigits: 0, maximumFractionDigits: 0
+    }).format(n);
+  } catch (e) {
+    return `${currency} ${Number(n).toFixed(0)}`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEND MESSAGE
+// ─────────────────────────────────────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  addUserMessage(text);
+  input.value = '';
+  input.style.height = 'auto';
+  setBtnDisabled(true);
+
+  const typingId = showTyping();
+
+  try {
+    const r = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, message: text })
+    });
+    const data = await r.json();
+    removeTyping(typingId);
+
+    if (data.error) {
+      addBotMessage('❌ ' + data.error);
+    } else if (data.type === 'transactions') {
+      addBotMessage(data.reply);
+      addTransactionCard(data.transactions);
+    } else {
+      addBotMessage(data.reply);
+    }
+  } catch (e) {
+    removeTyping(typingId);
+    addBotMessage('❌ Error de conexión. Intenta de nuevo.');
+  } finally {
+    setBtnDisabled(false);
+    document.getElementById('msg-input').focus();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILE UPLOAD
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  e.target.value = ''; // reset so same file can be re-uploaded
+
+  // Show user message
+  const isImage = file.type.startsWith('image/');
+  addUserMessage(isImage ? `📷 ${file.name}` : `📎 ${file.name}`);
+
+  // Show upload pill
+  const pill = document.getElementById('upload-pill');
+  const pillText = document.getElementById('upload-text');
+  pill.classList.add('visible');
+  pillText.textContent = `Procesando ${file.name}...`;
+  setBtnDisabled(true);
+
+  const typingId = showTyping();
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('userId', userId);
+
+    const r = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await r.json();
+
+    removeTyping(typingId);
+    pill.classList.remove('visible');
+
+    if (data.error) {
+      addBotMessage('❌ ' + data.error);
+      return;
+    }
+
+    const txCount = (data.transactions || []).length;
+    if (txCount === 0) {
+      addBotMessage('No encontré transacciones financieras en este archivo. ¿Puedes describir las transacciones manualmente?');
+    } else {
+      addBotMessage(`Encontré **${txCount}** transacción(es) en *${file.name}*. ¿Las confirmo y guardo?`);
+      addTransactionCard(data.transactions);
+    }
+  } catch (err) {
+    removeTyping(typingId);
+    pill.classList.remove('visible');
+    addBotMessage('❌ Error al procesar el archivo: ' + err.message);
+  } finally {
+    setBtnDisabled(false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTION CONFIRM CARD
+// ─────────────────────────────────────────────────────────────────────────────
+function addTransactionCard(transactions) {
+  if (!transactions || transactions.length === 0) return;
+
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+
+  const icon = document.createElement('div');
+  icon.className = 'bot-icon';
+  icon.textContent = '🧾';
+
+  const card = document.createElement('div');
+  card.className = 'tx-card';
+
+  const header = document.createElement('div');
+  header.className = 'tx-card-header';
+  header.innerHTML = `📋 ${transactions.length} transacción(es) extraída(s)`;
+  card.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'tx-list';
+
+  transactions.forEach(tx => {
+    const item = document.createElement('div');
+    item.className = 'tx-item';
+
+    const emoji = tx.type === 'income' ? '💰' : '💸';
+    const amtClass = tx.type === 'expense' ? 'expense' : '';
+    const amt = fmtCur(Math.abs(tx.amount), tx.currency || 'COP');
+
+    item.innerHTML = `
+      <div class="tx-icon">${emoji}</div>
+      <div class="tx-info">
+        <div class="tx-desc">${escHtml(tx.description || '')}</div>
+        <div class="tx-meta">${escHtml(tx.category || '')} ${tx.date ? '· ' + tx.date : ''}</div>
+        ${tx.alert ? `<div class="tx-alert">⚠️ ${escHtml(tx.alert)}</div>` : ''}
+      </div>
+      <div class="tx-amount ${amtClass}">${amt}</div>
+    `;
+    list.appendChild(item);
+  });
+
+  card.appendChild(list);
+
+  const actions = document.createElement('div');
+  actions.className = 'tx-actions';
+
+  const btnYes = document.createElement('button');
+  btnYes.className = 'btn-confirm';
+  btnYes.textContent = '✅ Sí, guardar';
+
+  const btnNo = document.createElement('button');
+  btnNo.className = 'btn-reject';
+  btnNo.textContent = '❌ No, descartar';
+
+  btnYes.onclick = async () => {
+    btnYes.disabled = true;
+    btnNo.disabled = true;
+    btnYes.textContent = '⏳ Guardando...';
+
+    try {
+      const r = await fetch('/transactions/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, transactions })
+      });
+      const data = await r.json();
+      actions.innerHTML = `<div style="font-size:13px;color:var(--green-main);font-weight:600;padding:4px 0">✅ ${data.saved} transacción(es) guardada(s) en ${data.period}</div>`;
+      await loadStats();
+      showToast(`✅ ${data.saved} transacciones guardadas`);
+    } catch (e) {
+      actions.innerHTML = `<div style="font-size:13px;color:var(--red);">❌ Error al guardar</div>`;
+    }
+  };
+
+  btnNo.onclick = () => {
+    actions.innerHTML = `<div style="font-size:13px;color:var(--gray-600);padding:4px 0">❌ Descartado</div>`;
+  };
+
+  actions.appendChild(btnYes);
+  actions.appendChild(btnNo);
+  card.appendChild(actions);
+
+  row.appendChild(icon);
+  row.appendChild(card);
+
+  document.getElementById('messages').appendChild(row);
+  scrollBottom();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CERRAR PERÍODO
+// ─────────────────────────────────────────────────────────────────────────────
+async function cerrarPeriodo() {
+  const confirmed = confirm('¿Cerrar el período actual y generar el reporte financiero completo?\n\nEsto puede tardar unos momentos mientras la IA analiza tus transacciones.');
+  if (!confirmed) return;
+
+  addBotMessage('⏳ Generando reporte de cierre de período... Esto puede tomar unos segundos.');
+
+  const typingId = showTyping();
+
+  try {
+    const r = await fetch(`/periods/${userId}/close`, { method: 'POST' });
+    const data = await r.json();
+    removeTyping(typingId);
+
+    if (data.error) {
+      addBotMessage('❌ ' + data.error);
+    } else {
+      addBotMessage(`✅ **Reporte generado para ${data.period}**\n\nTu reporte Excel con P&L, Balance, Flujo de Caja y Obligaciones Fiscales está listo.`);
+
+      // Add download link message
+      const row = document.createElement('div');
+      row.className = 'msg-row bot';
+      const icon = document.createElement('div');
+      icon.className = 'bot-icon';
+      icon.textContent = '🧾';
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = `<a href="${data.downloadUrl}" download style="color:var(--green-dark);font-weight:700;text-decoration:none;">📥 Descargar ${data.filename}</a>`;
+      row.appendChild(icon);
+      row.appendChild(bubble);
+      document.getElementById('messages').appendChild(row);
+      scrollBottom();
+
+      await loadStats();
+      showToast('📊 Reporte generado exitosamente');
+    }
+  } catch (e) {
+    removeTyping(typingId);
+    addBotMessage('❌ Error al cerrar período: ' + e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOM HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function addBotMessage(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+
+  const icon = document.createElement('div');
+  icon.className = 'bot-icon';
+  icon.textContent = '🧾';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = formatMessage(text);
+
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.textContent = timeNow();
+
+  row.appendChild(icon);
+  row.appendChild(bubble);
+  row.appendChild(time);
+  document.getElementById('messages').appendChild(row);
+  scrollBottom();
+}
+
+function addUserMessage(text) {
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+
+  const time = document.createElement('div');
+  time.className = 'msg-time';
+  time.textContent = timeNow();
+
+  row.appendChild(bubble);
+  row.appendChild(time);
+  document.getElementById('messages').appendChild(row);
+  scrollBottom();
+}
+
+function showTyping() {
+  const row = document.createElement('div');
+  row.className = 'msg-row bot';
+  row.id = 'typing-' + Date.now();
+
+  const icon = document.createElement('div');
+  icon.className = 'bot-icon';
+  icon.textContent = '🧾';
+
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+
+  row.appendChild(icon);
+  row.appendChild(typing);
+  document.getElementById('messages').appendChild(row);
+  scrollBottom();
+  return row.id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function scrollBottom() {
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+
+function setBtnDisabled(v) {
+  document.getElementById('btn-send').disabled = v;
+}
+
+function timeNow() {
+  return new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatMessage(text) {
+  // bold **text**
+  let s = escHtml(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+</body>
+</html>

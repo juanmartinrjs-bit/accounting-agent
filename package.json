@@ -1,19 +1,24 @@
 {
   "name": "accounting-agent",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "3.0.0",
+  "description": "Multi-country accounting assistant with web UI and Telegram bot",
+  "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
   },
-  "keywords": [],
+  "keywords": ["accounting", "ai", "telegram", "claude"],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "better-sqlite3": "^9.4.3",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "googleapis": "^171.4.0",
+    "multer": "^1.4.5-lts.1",
+    "node-telegram-bot-api": "^0.66.0",
+    "pdf-parse": "^1.1.1",
     "xlsx": "^0.18.5"
   }
 }

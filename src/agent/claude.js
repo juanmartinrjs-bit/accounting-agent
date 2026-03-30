@@ -1,202 +1,170 @@
+'use strict';
+
 const Anthropic = require('@anthropic-ai/sdk');
+const { getCountryKnowledge } = require('./country-knowledge');
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYSTEM PROMPT — Contador colombiano certificado
+// BASE SYSTEM PROMPT — Colombian accountant (kept for backwards compat)
 // ─────────────────────────────────────────────────────────────────────────────
-const ACCOUNTANT_SYSTEM_PROMPT = `Eres un contador público titulado con más de 15 años de experiencia en Colombia.
-Tienes conocimiento profundo del marco contable y fiscal colombiano, incluyendo:
-
-## MARCO NORMATIVO
-- Normas de Contabilidad e Información Financiera (NCIF) — convergencia con IFRS para Colombia
-- Decreto 2649/1993 y sus actualizaciones
-- Plan Único de Cuentas (PUC) — grupos de cuentas del 1 al 9
-- Estatuto Tributario colombiano (ET) — actualizado con últimas reformas
-- DIAN: obligaciones de declarantes y no declarantes
-
-## PLAN ÚNICO DE CUENTAS (PUC) — CATEGORÍAS PRINCIPALES
-Siempre clasifica transacciones según el PUC:
-
-**ACTIVOS (cuentas 1xxx):**
-- 1105/1110: Caja y Bancos
-- 1305: Clientes / Cuentas por cobrar
-- 1520: Propiedad, Planta y Equipo
-- 1110: Depósitos en cuentas (Bancolombia, Davivienda, Nequi, etc.)
-
-**PASIVOS (cuentas 2xxx):**
-- 2205: Proveedores
-- 2365: Retención en la fuente por pagar
-- 2367: IVA por pagar
-- 2370: ICA por pagar
-
-**PATRIMONIO (cuentas 3xxx):**
-- 3105: Capital social
-- 3605: Utilidad del ejercicio
-
-**INGRESOS (cuentas 4xxx):**
-- 4135: Comercio al por mayor y menor
-- 4155: Servicios
-- 4175: Honorarios
-- 4195: Otros ingresos no operacionales
-- 4210: Financieros (intereses, rendimientos)
-
-**GASTOS OPERACIONALES (cuentas 5xxx):**
-- 5105: Gastos de personal (salarios, prestaciones)
-- 5110: Honorarios
-- 5115: Impuestos (ICA, predial, industria)
-- 5120: Arrendamientos
-- 5125: Contribuciones y afiliaciones
-- 5130: Seguros
-- 5135: Servicios (internet, telefonía, agua, luz)
-- 5140: Gastos de viaje
-- 5145: Depreciaciones
-- 5195: Otros gastos operacionales (marketing, software, etc.)
-
-**COSTOS DE VENTAS (cuentas 6xxx):**
-- 6135: Comercio al por mayor
-- 6155: Servicios prestados
-
-**CUENTAS DE ORDEN (cuentas 8xxx y 9xxx)**
-
-## IMPUESTOS COLOMBIANOS
-**IVA (Impuesto al Valor Agregado):**
-- Tarifa general: 19%
-- Tarifas especiales: 5% (algunos alimentos, medicina prepagada)
-- Excluidos: educación, salud, servicios públicos domiciliarios
-- Responsables: régimen común (ahora contribuyentes del IVA)
-- No responsables: personas naturales con ingresos < 3.500 UVT anuales (~$167M COP en 2024)
-
-**Retención en la Fuente:**
-- Honorarios: 10% o 11% (si es persona jurídica que declara renta)
-- Servicios: 4% o 6%
-- Compras: 2.5% o 3.5%
-- Arrendamientos: 3.5%
-- Rendimientos financieros: 7%
-
-**ICA (Impuesto de Industria y Comercio):**
-- Varía por municipio, actividad económica
-- Bogotá: entre 2 y 14 por mil según actividad
-- Medellín, Cali, Barranquilla: tarifas similares
-
-**Renta — Personas Naturales:**
-- Renta exenta: hasta 1.090 UVT (~$52M COP 2024)
-- Rangos de tarifa: 0%, 19%, 28%, 33%, 35%, 37%, 39%
-- Deducciones: 25% de renta laboral (máx 2.880 UVT), salud, pensión
-
-**Renta — Personas Jurídicas:**
-- Tarifa general: 35%
-- Régimen Simple de Tributación: 1.8% a 14.5% según actividad e ingresos
-
-## SEÑALES DE ALERTA CONTABLE
-Identifica y alerta sobre:
-- Gastos no deducibles de renta (multas, sanciones, donaciones sin certificado)
-- Pagos en efectivo > 100 UVT sin soporte (no deducibles)
-- Operaciones sin factura electrónica
-- Descuadres de flujo de caja
-- Gastos personales mezclados con empresariales
-- Retenciones no aplicadas correctamente
-- IVA cobrado sin ser responsable del régimen
-
-## PLATAFORMAS COLOMBIANAS QUE CONOCES
-- **Nequi / Bancolombia / Davivienda / BBVA**: transferencias entre personas, pagos comerciales
-- **Daviplata**: billetera Davivienda
-- **PSE**: pagos electrónicos empresariales
-- **Adyen / PayU / ePayco**: pasarelas de pago para e-commerce
-- **Payoneer / Wise**: pagos internacionales (freelancers, exportación de servicios)
-- **Stripe**: pagos internacionales (negocios digitales)
-- **Rappi Pay / Bold**: pagos comercio informal
-- **Efecty / Baloto**: pagos en efectivo de facturas
-
-## DOCUMENTOS SOPORTE VÁLIDOS
-- Factura electrónica (obligatoria desde 2020 para la mayoría)
-- Documento equivalente (tiquetes POS, entradas, etc.)
-- Contrato como soporte de servicios
-- Extracto bancario para transferencias
-- Comprobante de nómina
-
-## CONTEXTO USO PERSONAL vs EMPRESARIAL
-**Uso Personal:**
-- Presupuesto mensual: ingresos vs gastos fijos/variables
-- Ahorro e inversión (CDTs, fondos)
-- Créditos y deudas
-- Declaración de renta si supera topes (1.400 UVT en patrimonio o 1.090 UVT en ingresos brutos)
-- Gastos deducibles personales: medicina prepagada, intereses de vivienda
-
-**Uso Empresarial:**
-- Estado de Resultados (P&L)
-- Balance General
-- Flujo de Caja
-- Obligaciones DIAN: declaración renta, IVA bimestral/cuatrimestral, ICA
-- Nómina y seguridad social
-- Retenciones en la fuente
-
-## TU COMPORTAMIENTO
-- Clasifica SIEMPRE por PUC cuando sea transacción empresarial
-- Detecta si es ingreso gravado, excluido o exento del IVA
-- Identifica si aplica retención en la fuente y el porcentaje
-- Alerta cuando un gasto podría no ser deducible
-- Diferencia entre persona natural y jurídica cuando sea relevante
-- Usa COP como moneda principal
-- Cuando hay moneda extranjera, convierte a COP usando TRM (tasa representativa del mercado)
-- Habla en español, tono profesional pero claro`;
+const ACCOUNTANT_SYSTEM_PROMPT = `Eres un contador público titulado con más de 15 años de experiencia internacional.
+Tienes conocimiento profundo de marcos contables y fiscales de múltiples países.
+Siempre respondes en español, con tono profesional pero claro.
+Clasificas transacciones correctamente según el sistema contable del país del usuario.
+Detectas alertas fiscales, gastos no deducibles y obligaciones tributarias.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Extraer transacción de un email
+// BUILD SYSTEM PROMPT FOR A SPECIFIC USER
 // ─────────────────────────────────────────────────────────────────────────────
-async function extractTransaction(email) {
+async function buildSystemPrompt(user) {
+  let countryKnowledge = null;
+
+  if (user && user.country) {
+    try {
+      countryKnowledge = await getCountryKnowledge(user.country);
+    } catch (e) {
+      // fallback to base prompt
+    }
+  }
+
+  const base = `Eres un contador público titulado con más de 15 años de experiencia internacional.
+Clasificas transacciones correctamente según el sistema contable del país del usuario.
+Detectas alertas fiscales, gastos no deducibles y obligaciones tributarias.
+Siempre respondes en español con tono profesional pero claro.
+Moneda principal del usuario: ${(user && user.currency) || 'USD'}.
+País del usuario: ${(user && user.country_name) || 'desconocido'}.
+Régimen fiscal: ${(user && user.tax_regime) || 'no especificado'}.`;
+
+  if (countryKnowledge && countryKnowledge.systemPromptAddition) {
+    return base + '\n\n' + countryKnowledge.systemPromptAddition;
+  }
+
+  return base;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRACT TRANSACTIONS FROM TEXT
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractTransactionsFromText(text, user) {
+  const systemPrompt = await buildSystemPrompt(user);
+  const currency = (user && user.currency) || 'COP';
+
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 500,
-    system: ACCOUNTANT_SYSTEM_PROMPT,
+    max_tokens: 1500,
+    system: systemPrompt,
     messages: [{
       role: 'user',
-      content: `Analiza este email y extrae la información de la transacción financiera.
-Si NO es una transacción financiera real (pago, cobro, factura, transferencia), devuelve null.
+      content: `Analiza este texto y extrae TODAS las transacciones financieras que encuentres.
+Si NO hay transacciones financieras reales, devuelve un array vacío [].
 
-Email:
-Asunto: ${email.subject}
-De: ${email.from}
-Fecha: ${email.date}
-Cuerpo: ${email.body}
+Texto:
+${text}
 
-Devuelve SOLO JSON válido con este formato exacto, sin texto adicional:
-{
-  "date": "YYYY-MM-DD",
-  "amount": número en COP (positivo=ingreso, negativo=gasto),
-  "currency": "COP",
-  "original_currency": "USD/EUR/COP si aplica",
-  "original_amount": número en moneda original si aplica,
-  "description": "descripción clara de la transacción",
-  "category": "categoría PUC",
-  "puc_code": "código PUC ejemplo 5135",
-  "type": "income o expense",
-  "source": "nombre del pagador/plataforma",
-  "tax_notes": "observación sobre IVA, retención u otro impuesto relevante",
-  "deductible": true o false,
-  "confidence": "high, medium o low",
-  "alert": "advertencia contable si aplica, sino null"
-}`
+Devuelve SOLO un JSON array válido con este formato, sin texto adicional:
+[
+  {
+    "date": "YYYY-MM-DD",
+    "amount": número positivo en ${currency},
+    "currency": "${currency}",
+    "original_currency": "moneda original si aplica o null",
+    "original_amount": número si aplica o null,
+    "description": "descripción clara",
+    "category": "categoría contable",
+    "puc_code": "código de cuenta contable",
+    "type": "income o expense",
+    "source": "origen o pagador",
+    "deductible": true o false,
+    "tax_notes": "notas fiscales relevantes o null",
+    "alert": "alerta contable si aplica o null",
+    "confidence": "high, medium o low"
+  }
+]`
+    }]
+  });
+
+  try {
+    const text2 = response.content[0].text.trim();
+    const jsonMatch = text2.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+    const parsed = JSON.parse(jsonMatch[0]);
+    return parsed.filter(t => t.confidence !== 'low');
+  } catch (e) {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRACT TRANSACTIONS FROM IMAGE (Claude Vision)
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractTransactionsFromImage(base64Image, mimeType, user) {
+  const systemPrompt = await buildSystemPrompt(user);
+  const currency = (user && user.currency) || 'COP';
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 1500,
+    system: systemPrompt,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mimeType,
+            data: base64Image
+          }
+        },
+        {
+          type: 'text',
+          text: `Analiza esta imagen (puede ser una factura, recibo, extracto bancario, comprobante de pago).
+Extrae TODAS las transacciones financieras que puedas identificar.
+Si NO hay transacciones financieras, devuelve [].
+
+Devuelve SOLO un JSON array válido con este formato, sin texto adicional:
+[
+  {
+    "date": "YYYY-MM-DD",
+    "amount": número positivo en ${currency},
+    "currency": "${currency}",
+    "original_currency": "moneda original si aplica o null",
+    "original_amount": número si aplica o null,
+    "description": "descripción de la transacción",
+    "category": "categoría contable",
+    "puc_code": "código de cuenta contable",
+    "type": "income o expense",
+    "source": "proveedor/pagador extraído del documento",
+    "deductible": true o false,
+    "tax_notes": "notas de IVA, retención u otros impuestos",
+    "alert": "alerta contable si aplica o null",
+    "confidence": "high, medium o low"
+  }
+]`
+        }
+      ]
     }]
   });
 
   try {
     const text = response.content[0].text.trim();
-    // Extraer JSON aunque venga con texto alrededor
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
     const parsed = JSON.parse(jsonMatch[0]);
-    if (parsed.confidence === 'low') return null;
-    return parsed;
+    return parsed.filter(t => t.confidence !== 'low');
   } catch (e) {
-    return null;
+    return [];
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Generar análisis P&L completo como contador colombiano
+// GENERATE PERIOD REPORT
 // ─────────────────────────────────────────────────────────────────────────────
-async function generateSummary(transactions, context = 'empresa') {
+async function generatePeriodReport(transactions, user, period) {
+  const systemPrompt = await buildSystemPrompt(user);
+  const currency = (user && user.currency) || 'COP';
+
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0);
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0);
   const netProfit = totalIncome - totalExpense;
@@ -208,60 +176,138 @@ async function generateSummary(transactions, context = 'empresa') {
     return acc;
   }, {});
 
-  const nonDeductible = transactions.filter(t => t.deductible === false);
   const alerts = transactions.filter(t => t.alert).map(t => t.alert);
+  const nonDeductible = transactions.filter(t => t.deductible === false || t.deductible === 0);
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 1000,
-    system: ACCOUNTANT_SYSTEM_PROMPT,
+    max_tokens: 2000,
+    system: systemPrompt,
     messages: [{
       role: 'user',
-      content: `Como contador colombiano certificado, genera un análisis financiero completo en español.
+      content: `Genera un informe financiero completo para el período ${period} del usuario.
+País: ${user.country_name || 'Colombia'}
+Moneda: ${currency}
+Régimen: ${user.tax_regime || 'no especificado'}
 
-Contexto: ${context === 'personal' ? 'Finanzas personales (persona natural)' : 'Contabilidad empresarial (empresa o independiente)'}
+DATOS:
+- Total Ingresos: ${totalIncome} ${currency}
+- Total Gastos: ${totalExpense} ${currency}
+- Utilidad/Pérdida Neta: ${netProfit} ${currency}
+- Transacciones totales: ${transactions.length}
+- Gastos no deducibles: ${nonDeductible.length}
 
-RESUMEN FINANCIERO:
-- Total Ingresos: $${formatCOP(totalIncome)} COP
-- Total Gastos: $${formatCOP(totalExpense)} COP
-- Utilidad/Pérdida Neta: $${formatCOP(netProfit)} COP
-
-POR CATEGORÍA (PUC):
+POR CATEGORÍA:
 ${JSON.stringify(byCategory, null, 2)}
 
-GASTOS NO DEDUCIBLES DETECTADOS: ${nonDeductible.length}
-${nonDeductible.map(t => `- ${t.description}: $${formatCOP(Math.abs(t.amount))} COP`).join('\n')}
+ALERTAS: ${alerts.length > 0 ? alerts.join('; ') : 'ninguna'}
 
-ALERTAS CONTABLES:
-${alerts.length > 0 ? alerts.join('\n') : 'Ninguna'}
-
-Proporciona:
-1. Análisis del estado de resultados (P&L)
-2. Observaciones fiscales importantes (IVA, retenciones, renta)
-3. Gastos no deducibles y su impacto
-4. Recomendaciones concretas para optimizar la carga tributaria
-5. Señales de alerta si las hay
-
-Sé específico con cifras en COP y referencias a la normativa colombiana.`
+Devuelve SOLO JSON válido con esta estructura:
+{
+  "summary": "resumen ejecutivo del período en 3-4 párrafos",
+  "balanceSheet": {
+    "assets": {"cash": número, "receivables": número, "total": número},
+    "liabilities": {"payables": número, "taxesOwed": número, "total": número},
+    "equity": número
+  },
+  "cashFlow": {
+    "operatingInflows": número,
+    "operatingOutflows": número,
+    "netCashFlow": número
+  },
+  "taxObligations": [
+    {
+      "name": "nombre del impuesto",
+      "amount": número estimado,
+      "dueDate": "fecha límite aproximada",
+      "description": "descripción breve"
+    }
+  ],
+  "recommendations": ["recomendación 1", "recomendación 2"]
+}`
     }]
   });
 
-  return response.content[0].text;
+  try {
+    const text = response.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+  } catch (e) {
+    // fallback
+  }
+
+  return {
+    summary: `Período ${period}: Ingresos ${totalIncome} ${currency}, Gastos ${totalExpense} ${currency}, Neto ${netProfit} ${currency}.`,
+    balanceSheet: {
+      assets: { cash: Math.max(netProfit, 0), receivables: 0, total: Math.max(netProfit, 0) },
+      liabilities: { payables: 0, taxesOwed: 0, total: 0 },
+      equity: netProfit
+    },
+    cashFlow: { operatingInflows: totalIncome, operatingOutflows: totalExpense, netCashFlow: netProfit },
+    taxObligations: [],
+    recommendations: []
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Responder preguntas contables en modo conversacional
+// ONBOARDING HANDLER
 // ─────────────────────────────────────────────────────────────────────────────
-async function askAccountant(question, conversationHistory = []) {
+async function handleOnboarding(message, history, userId) {
+  const { normalizeCountryCode, getCountryKnowledge } = require('./country-knowledge');
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 500,
+    system: `Eres un asistente contable configurando una cuenta nueva. 
+El usuario está respondiendo preguntas de configuración.
+Extrae la información relevante del mensaje y devuelve JSON.
+Responde siempre en español.`,
+    messages: [
+      ...history,
+      { role: 'user', content: message }
+    ]
+  });
+
+  const reply = response.content[0].text;
+
+  // Try to extract country, regime, etc from message
+  const countryCode = normalizeCountryCode(message);
+  let countryName = null;
+  let currency = null;
+
+  if (countryCode) {
+    try {
+      const knowledge = await getCountryKnowledge(countryCode);
+      countryName = knowledge.countryName;
+      currency = knowledge.currency;
+    } catch (e) { /* ignore */ }
+  }
+
+  return {
+    reply,
+    updates: {
+      country: countryCode,
+      country_name: countryName,
+      currency
+    }
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERAL ACCOUNTANT CHAT
+// ─────────────────────────────────────────────────────────────────────────────
+async function askAccountant(message, history = [], user = null) {
+  const systemPrompt = user ? await buildSystemPrompt(user) : ACCOUNTANT_SYSTEM_PROMPT;
+
   const messages = [
-    ...conversationHistory,
-    { role: 'user', content: question }
+    ...history,
+    { role: 'user', content: message }
   ];
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-5-20250929',
     max_tokens: 1000,
-    system: ACCOUNTANT_SYSTEM_PROMPT,
+    system: systemPrompt,
     messages
   });
 
@@ -269,7 +315,81 @@ async function askAccountant(question, conversationHistory = []) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Analizar una transacción específica con criterio contable
+// LEGACY: extract from email
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractTransaction(email) {
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 500,
+    system: ACCOUNTANT_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Analiza este email y extrae la transacción financiera. Si NO es una transacción real, devuelve null.
+
+Email:
+Asunto: ${email.subject}
+De: ${email.from}
+Fecha: ${email.date}
+Cuerpo: ${email.body}
+
+Devuelve SOLO JSON válido o null:
+{
+  "date": "YYYY-MM-DD",
+  "amount": número COP,
+  "currency": "COP",
+  "original_currency": null,
+  "original_amount": null,
+  "description": "descripción",
+  "category": "categoría",
+  "puc_code": "código",
+  "type": "income o expense",
+  "source": "origen",
+  "tax_notes": null,
+  "deductible": true,
+  "confidence": "high/medium/low",
+  "alert": null
+}`
+    }]
+  });
+
+  try {
+    const text = response.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (parsed.confidence === 'low') return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY: generate summary
+// ─────────────────────────────────────────────────────────────────────────────
+async function generateSummary(transactions, context = 'empresa') {
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + Math.abs(t.amount), 0);
+  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Math.abs(t.amount), 0);
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 1000,
+    system: ACCOUNTANT_SYSTEM_PROMPT,
+    messages: [{
+      role: 'user',
+      content: `Genera un análisis financiero en español.
+Ingresos: ${totalIncome} COP
+Gastos: ${totalExpense} COP
+Neto: ${totalIncome - totalExpense} COP
+Transacciones: ${transactions.length}`
+    }]
+  });
+
+  return response.content[0].text;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LEGACY: analyze transaction
 // ─────────────────────────────────────────────────────────────────────────────
 async function analyzeTransaction(description, amount, currency = 'COP', context = 'empresa') {
   const response = await client.messages.create({
@@ -278,28 +398,14 @@ async function analyzeTransaction(description, amount, currency = 'COP', context
     system: ACCOUNTANT_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
-      content: `Analiza esta transacción desde el punto de vista contable colombiano:
-
-Descripción: ${description}
-Monto: ${amount} ${currency}
-Contexto: ${context}
-
-Indica:
-1. Clasificación PUC correcta (código y nombre de cuenta)
-2. ¿Es ingreso o gasto?
-3. ¿Es deducible de renta? ¿Por qué?
-4. ¿Aplica IVA? ¿Qué tarifa?
-5. ¿Aplica retención en la fuente? ¿Qué porcentaje?
-6. ¿Alguna observación o alerta importante?`
+      content: `Analiza esta transacción: ${description}, Monto: ${amount} ${currency}, Contexto: ${context}.
+Indica: clasificación PUC, tipo, deducibilidad, IVA, retención y alertas.`
     }]
   });
 
   return response.content[0].text;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: formatear números en COP
-// ─────────────────────────────────────────────────────────────────────────────
 function formatCOP(amount) {
   return new Intl.NumberFormat('es-CO', {
     minimumFractionDigits: 0,
@@ -308,10 +414,15 @@ function formatCOP(amount) {
 }
 
 module.exports = {
+  ACCOUNTANT_SYSTEM_PROMPT,
+  buildSystemPrompt,
+  extractTransactionsFromText,
+  extractTransactionsFromImage,
+  generatePeriodReport,
+  handleOnboarding,
+  askAccountant,
   extractTransaction,
   generateSummary,
-  askAccountant,
   analyzeTransaction,
-  formatCOP,
-  ACCOUNTANT_SYSTEM_PROMPT
+  formatCOP
 };
